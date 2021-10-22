@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+
+import subprocess
+
+services = ['sshd', 'smbd', 'docker', 'kubelet']
+services_columns = 5
+bar_length = 25
+usage_critical = 90
+
+default = f'\033[0m'
+black = f'\033[1;38;5;237m'
+grey = f'\033[1;38;5;245m'
+green = f'\033[1;38;5;2m'
+red = f'\033[1;38;5;160m'
+blue = f'\033[1;38;5;75m'
+
+
+def print_format(header, content):
+    print(f'  {grey}{header:8}{default} : {content}')
+
+def draw_bar(used):
+    color = green if used < usage_critical else red
+    bar_length_used = int((used * bar_length) / 100)
+
+    bar = f'['
+    bar += f'{color}={default}' * bar_length_used
+    bar += f'{black}={default}' * (bar_length - bar_length_used)
+    bar += f']'
+
+    return bar
+
+def run(command):
+    return subprocess.run(command, shell=True, text=True, stdout=subprocess.PIPE).stdout.splitlines()
+
+def _uptime():
+    uptime = int(run(f'cut -d "." "/proc/uptime" -f 1')[0])
+    seconds = int(uptime % 60)
+    minutes = int(uptime / 60 % 60)
+    hours = int(uptime / 60 / 60 % 24)
+    days = int(uptime / 60 / 60 / 24)
+    return f'{days}d {hours}h {minutes}m'
+
+def _distribution():
+    return run(f'lsb_release -ds')[0].strip()
+
+def _kernel():
+    return run(f'uname -rs')[0].strip()
+
+def _hostname():
+    return run(f'hostname')[0].strip()
+
+def _cpu():
+    return run(f'grep -i "name" "/proc/cpuinfo"')[0].split(':')[1].strip()
+
+def _memory():
+    results = run(f'free -h | grep -i "mem"')[0].split()
+    total = results[1]
+    used = results[2]
+    free = results[3]
+    available = results[6]
+    return f't:{blue}{total:5}{default} u:{blue}{used:5}{default} f:{blue}{free:5}{default} a:{blue}{available:5}{default}'
+
+def _swap():
+    results = run(f'free -h | grep -i "swap"')[0].split()
+    total = results[1]
+    used = results[2]
+    free = results[3]
+    return f't:{blue}{total:5}{default} u:{blue}{used:5}{default} f:{blue}{free:5}{default}'
+
+def _filesystems():
+    mounts = run(f'df -h -t ext4 --output=target,size,used,pcent | tail -n +2 | sort')
+
+    for mount in mounts:
+        path, size, used, percent = mount.split()
+
+        usage = float(percent.strip('%'))
+        bar = draw_bar(usage)
+
+        print(f'  {bar} {path:15} {size:>4} {used:>4} ({percent:>1})')
+
+def _services():
+    output = f''
+    i = 0
+    for service in services:
+        status = run(f'systemctl is-active {service}')[0]
+
+        color = green if status == 'active' else red
+
+        output += f'  {color}•{default} {service:8}'
+
+        i += 1
+        if i % services_columns == 0:
+            output += f'\n'
+
+    print(f'{output}')
+
+
+distribution = _distribution()
+kernel = _kernel()
+
+print(f'{distribution} {kernel}')
+print_format('hostname', _hostname())
+print_format('uptime', _uptime())
+print_format('cpu', _cpu())
+print_format('memory', _memory())
+print_format('swap', _swap())
+print(f'')
+
+print(f'File Systems:')
+_filesystems()
+print(f'')
+
+print(f'Services:')
+_services()
+print(f'')
