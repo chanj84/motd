@@ -2,21 +2,25 @@
 
 import subprocess
 
-services = ['sshd', 'smbd', 'docker', 'kubelet']
+services = ['sshd', 'smbd', 'docker']
 services_columns = 5
 bar_length = 25
 usage_critical = 90
 
 default = f'\033[0m'
-black = f'\033[1;38;5;237m'
-grey = f'\033[1;38;5;245m'
+bold = f'\033[1m'
+black = f'\033[1;38;5;235m'
+grey = f'\033[1;38;5;240m'
 green = f'\033[1;38;5;2m'
 red = f'\033[1;38;5;160m'
-blue = f'\033[1;38;5;75m'
+blue = f'\033[1;38;5;39m'
+
+header = bold
+subheader = grey
 
 
 def print_format(header, content):
-    print(f'  {grey}{header:8}{default} : {content}')
+    print(f'  {subheader}{header:8}{default} : {content}')
 
 def draw_bar(used):
     color = green if used < usage_critical else red
@@ -50,7 +54,9 @@ def _hostname():
     return run(f'hostname')[0].strip()
 
 def _cpu():
-    return run(f'grep -i "name" "/proc/cpuinfo"')[0].split(':')[1].strip()
+    cpu = run(f'grep -i "name" "/proc/cpuinfo"')[0].split(':')[1].strip()
+    cpu_num = run(f'lscpu | grep -i "^cpu(s)"')[0].split(':')[1].strip()
+    return f'{cpu} ({subheader}cpus{default}: {cpu_num})'
 
 def _memory():
     results = run(f'free -h | grep -i "mem"')[0].split()
@@ -58,25 +64,27 @@ def _memory():
     used = results[2]
     free = results[3]
     available = results[6]
-    return f't:{blue}{total:5}{default} u:{blue}{used:5}{default} f:{blue}{free:5}{default} a:{blue}{available:5}{default}'
+    return f'{subheader}t{default}:{total:5} {subheader}u{default}:{used:5} {subheader}f{default}:{free:5} {subheader}a{default}:{available:5}'
 
 def _swap():
     results = run(f'free -h | grep -i "swap"')[0].split()
     total = results[1]
     used = results[2]
     free = results[3]
-    return f't:{blue}{total:5}{default} u:{blue}{used:5}{default} f:{blue}{free:5}{default}'
+    return f'{subheader}t{default}:{total:5} {subheader}u{default}:{used:5} {subheader}f{default}:{free:5}'
 
-def _filesystems():
-    mounts = run(f'df -h -t ext4 --output=target,size,used,pcent | tail -n +2 | sort')
+def _filesystems(fstype):
+    command = f'df -h -t {fstype} --output=target,size,used,pcent | tail -n +2 | sort'
+    mounts = run(command)
 
     for mount in mounts:
         path, size, used, percent = mount.split()
 
         usage = float(percent.strip('%'))
+        color = default if usage < usage_critical else red
         bar = draw_bar(usage)
 
-        print(f'  {bar} {path:15} {size:>4} {used:>4} ({percent:>1})')
+        print(f'  {bar} {subheader}t{default}:{size:5} {subheader}u{default}:{color}{used:5}{default} {color}{percent:>3}{default} {path}')
 
 def _services():
     output = f''
@@ -98,7 +106,7 @@ def _services():
 distribution = _distribution()
 kernel = _kernel()
 
-print(f'{distribution} {kernel}')
+print(f'{header}{distribution} {kernel}{default}')
 print_format('hostname', _hostname())
 print_format('uptime', _uptime())
 print_format('cpu', _cpu())
@@ -106,10 +114,11 @@ print_format('memory', _memory())
 print_format('swap', _swap())
 print(f'')
 
-print(f'File Systems:')
-_filesystems()
+print(f'{header}File Systems{default}:')
+_filesystems('ext4')
+_filesystems('cifs')
 print(f'')
 
-print(f'Services:')
+print(f'{header}Services{default}:')
 _services()
 print(f'')
