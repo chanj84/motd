@@ -54,7 +54,7 @@ def _hostname():
     return run(f'hostname')[0].strip()
 
 def _cpu():
-    cpu = run(f'grep -i "name" "/proc/cpuinfo"')[0].split(':')[1].strip()
+    cpu = run(f'lscpu | grep -i "name"')[0].split(':')[1].strip()
     cpu_num = run(f'lscpu | grep -i "^cpu(s)"')[0].split(':')[1].strip()
     return f'{cpu} ({subheader}cpus{default}: {cpu_num})'
 
